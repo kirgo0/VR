@@ -1,6 +1,6 @@
+// shader.gpu
 
-
-// Vertex shader
+// Vertex shader (model)
 const vertexShaderSource = `
 attribute vec3 vertex;
 uniform mat4 ModelViewMatrix;
@@ -11,7 +11,7 @@ void main() {
 }`;
 
 
-// Fragment shader
+// Fragment shader (model)
 const fragmentShaderSource = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
    precision highp float;
@@ -22,4 +22,30 @@ const fragmentShaderSource = `
 uniform vec4 color;
 void main() {
     gl_FragColor = color;
+}`;
+
+
+// Vertex shader (background webcam quad)
+const bgVertexShaderSource = `
+attribute vec2 vertex;
+attribute vec2 texcoord;
+varying vec2 vTexCoord;
+void main() {
+    vTexCoord = texcoord;
+    gl_Position = vec4(vertex, 0.0, 1.0);
+}`;
+
+
+// Fragment shader (background webcam quad)
+const bgFragmentShaderSource = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+   precision highp float;
+#else
+   precision mediump float;
+#endif
+
+varying vec2 vTexCoord;
+uniform sampler2D uSampler;
+void main() {
+    gl_FragColor = texture2D(uSampler, vTexCoord);
 }`;

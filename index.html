@@ -1,33 +1,105 @@
 <!DOCTYPE html>
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<html>
 
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
-<title>PA#1</title>
-<style>
-    body {
-        background-color: #EEEEEE;
-    }
-</style>
+    <title>PA#1 — Anaglyph Stereo</title>
+    <style>
+        body {
+            background-color: #EEEEEE;
+            font-family: sans-serif;
+        }
 
-<script src="./Utils/trackball-rotator.js"></script>
-<script src="./Utils/m4.js"></script>
-<script src="./shader.gpu"></script>
-<script src="./Model.js"></script>
-<script src="./StereoCamera.js"></script>
-<script src="./main.js"></script>
+        #canvas-holder {
+            position: relative;
+            width: 600px;
+            height: 600px;
+        }
+
+        #webglcanvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 1;
+        }
+
+        #controls {
+            margin-top: 12px;
+            max-width: 600px;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin: 6px 0;
+        }
+
+        .control-row label {
+            width: 180px;
+        }
+
+        .control-row input[type=range] {
+            flex: 1;
+        }
+
+        .control-row span {
+            width: 70px;
+            text-align: right;
+            font-family: monospace;
+        }
+
+        /* Hidden video element used as texture source */
+        #webcam {
+            display: none;
+        }
+    </style>
+
+    <script src="./Utils/trackball-rotator.js"></script>
+    <script src="./Utils/m4.js"></script>
+    <script src="./shader.gpu"></script>
+    <script src="./Model.js"></script>
+    <script src="./StereoCamera.js"></script>
+    <script src="./main.js"></script>
 
 </head>
+
 <body onload="init()">
 
-<h2>A Cube with "Trackball" Mouse Rotation</h2>
+    <h2>Anaglyph Stereo with Webcam Background</h2>
 
-<p id="message">Drag your mouse on the cube to rotate it.<br>
-(On a touch screen, you can use your finger.)</p>
+    <p id="message">Drag your mouse on the canvas to rotate the model.<br>
+        (On a touch screen, you can use your finger.) Put on your red/cyan glasses.</p>
 
+    <div id="canvas-holder">
+        <canvas width="600" height="600" id="webglcanvas"></canvas>
+    </div>
 
-<div id="canvas-holder">
-   <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
-</div>
+    <video id="webcam" autoplay playsinline muted></video>
 
+    <div id="controls">
+        <div class="control-row">
+            <label for="eyeSep">Eye Separation</label>
+            <input type="range" id="eyeSep" min="0.0" max="2.0" step="0.01" value="0.7">
+            <span id="eyeSepVal">0.70</span>
+        </div>
+        <div class="control-row">
+            <label for="fov">Field of View (deg)</label>
+            <input type="range" id="fov" min="10" max="90" step="1" value="23">
+            <span id="fovVal">23</span>
+        </div>
+        <div class="control-row">
+            <label for="near">Near Clipping</label>
+            <input type="range" id="near" min="1.0" max="15.0" step="0.1" value="8.0">
+            <span id="nearVal">8.0</span>
+        </div>
+        <div class="control-row">
+            <label for="conv">Convergence</label>
+            <input type="range" id="conv" min="5.0" max="40.0" step="0.1" value="14.0">
+            <span id="convVal">14.0</span>
+        </div>
+    </div>
 
-</body></html>
+</body>
+
+</html>
