@@ -4,7 +4,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
-    <title>PA#1 — Anaglyph Stereo</title>
+    <title>PA#2 — TUI Anaglyph Stereo</title>
     <style>
         body {
             background-color: #EEEEEE;
@@ -49,9 +49,23 @@
             font-family: monospace;
         }
 
-        /* Hidden video element used as texture source */
         #webcam {
             display: none;
+        }
+
+        #status {
+            margin-top: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #444;
+        }
+
+        #status .ok {
+            color: #2a7a2a;
+        }
+
+        #status .bad {
+            color: #a32;
         }
     </style>
 
@@ -60,16 +74,20 @@
     <script src="./shader.gpu"></script>
     <script src="./Model.js"></script>
     <script src="./StereoCamera.js"></script>
+    <script src="./SensorClient.js"></script>
     <script src="./main.js"></script>
 
 </head>
 
 <body onload="init()">
 
-    <h2>Anaglyph Stereo with Webcam Background</h2>
+    <h2>PA#2 — Parabolic Humming-Top, Phone-Tilt TUI</h2>
 
-    <p id="message">Drag your mouse on the canvas to rotate the model.<br>
-        (On a touch screen, you can use your finger.) Put on your red/cyan glasses.</p>
+    <p id="message">
+        Drag with mouse/finger to rotate. Phone tilt (accelerometer) composes with
+        the trackball — toggle below.<br>
+        Put on red/cyan glasses for the stereo effect.
+    </p>
 
     <div id="canvas-holder">
         <canvas width="600" height="600" id="webglcanvas"></canvas>
@@ -98,6 +116,18 @@
             <input type="range" id="conv" min="5.0" max="40.0" step="0.1" value="14.0">
             <span id="convVal">14.0</span>
         </div>
+        <div class="control-row">
+            <label for="useTilt">Use phone tilt</label>
+            <input type="checkbox" id="useTilt" checked>
+            <span></span>
+        </div>
+    </div>
+
+    <div id="status">
+        Sensor: <span id="sensorState" class="bad">disconnected</span>
+        &nbsp;|&nbsp; ax=<span id="axVal">0.00</span>
+        &nbsp; ay=<span id="ayVal">0.00</span>
+        &nbsp; az=<span id="azVal">0.00</span>
     </div>
 
 </body>

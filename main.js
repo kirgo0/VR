@@ -3,20 +3,21 @@
 
 let gl;
 let surface;
-let shProgram;          // Model shader
-let bgProgram;          // Background (webcam) shader
+let shProgram;
+let bgProgram;
 let spaceball;
 let stereoCam;
 
-let videoElem;          // <video> element
-let videoTexture;       // GL texture sampling the video
+let videoElem;
+let videoTexture;
 let videoReady = false;
 
-let bgQuadBuffer;       // Fullscreen quad position buffer
-let bgTexBuffer;        // Fullscreen quad texcoord buffer
+let bgQuadBuffer;
+let bgTexBuffer;
 
-// Model center of mass (for rotation around it)
 let modelCenter = [0, 0, 0];
+
+let sensorClient;        // PA#2 — phone accelerometer over WebSocket
 
 
 function ShaderProgram(name, program) {
@@ -28,13 +29,10 @@ function ShaderProgram(name, program) {
     this.iModelViewMatrix = -1;
     this.iProjectionMatrix = -1;
 
-    this.Use = function () {
-        gl.useProgram(this.prog);
-    };
+    this.Use = function () { gl.useProgram(this.prog); };
 }
 
 
-/* Read current control values from UI sliders */
 function readStereoParams() {
     const eyeSep = parseFloat(document.getElementById('eyeSep').value);
     const fovDeg = parseFloat(document.getElementById('fov').value);
@@ -53,18 +51,34 @@ function readStereoParams() {
 }
 
 
-/* Webcam fullscreen quad — drawn at "zero parallax" (a flat plane behind the model) */
+function updateSensorStatus() {
+    if (!sensorClient) return;
+    const stateEl = document.getElementById('sensorState');
+    const fresh = (Date.now() - sensorClient.lastSampleTime) < 1000;
+    if (sensorClient.connected && fresh) {
+        stateEl.textContent = 'connected';
+        stateEl.className = 'ok';
+    } else if (sensorClient.connected) {
+        stateEl.textContent = 'no samples';
+        stateEl.className = 'bad';
+    } else {
+        stateEl.textContent = 'disconnected';
+        stateEl.className = 'bad';
+    }
+    document.getElementById('axVal').textContent = sensorClient.ax.toFixed(2);
+    document.getElementById('ayVal').textContent = sensorClient.ay.toFixed(2);
+    document.getElementById('azVal').textContent = sensorClient.az.toFixed(2);
+}
+
+
 function drawBackground() {
     if (!videoReady) return;
-
     gl.useProgram(bgProgram.prog);
 
     gl.bindTexture(gl.TEXTURE_2D, videoTexture);
     try {
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoElem);
-    } catch (e) {
-        return;
-    }
+    } catch (e) { return; }
 
     gl.disable(gl.DEPTH_TEST);
     gl.colorMask(true, true, true, true);
@@ -82,12 +96,10 @@ function drawBackground() {
     gl.uniform1i(bgProgram.iSampler, 0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
     gl.enable(gl.DEPTH_TEST);
 }
 
 
-/* Filled polygons (dark) + wireframe overlay for one stereo eye */
 function drawStereoEye(projection, modelView) {
     shProgram.Use();
     gl.uniformMatrix4fv(shProgram.iProjectionMatrix, false, projection);
@@ -98,11 +110,9 @@ function drawStereoEye(projection, modelView) {
     gl.enableVertexAttribArray(shProgram.iAttribVertex);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, surface.iIndexBuffer);
 
-    // Filled (dark) so wireframe stands out
     gl.uniform4fv(shProgram.iColor, [0.12, 0.12, 0.12, 1.0]);
     surface.Draw();
 
-    // Wireframe (bright) on top
     gl.depthFunc(gl.LEQUAL);
     gl.uniform4fv(shProgram.iColor, [1.0, 1.0, 1.0, 1.0]);
     surface.DrawWireframe();
@@ -111,42 +121,47 @@ function drawStereoEye(projection, modelView) {
 
 function draw() {
     readStereoParams();
+    updateSensorStatus();
 
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    // 1) Webcam first, at zero parallax
     drawBackground();
     gl.clear(gl.DEPTH_BUFFER_BIT);
 
-    // 2) Build modelView so the humming-top sits in NEGATIVE parallax
+    // ---- Compose orientation: trackball ⊕ phone-tilt ----
     const trackball = spaceball.getViewMatrix();
+
+    let orientation = trackball;
+    const useTilt = document.getElementById('useTilt').checked;
+    if (useTilt && sensorClient) {
+        const tilt = sensorClient.getTiltMatrix();
+        // Apply phone tilt FIRST (object-space), then user trackball:
+        //   final = trackball * tilt
+        orientation = m4.multiply(trackball, tilt);
+    }
 
     // Rotate around model's center of mass: T(+c) * R * T(-c)
     const toCenter = m4.translation(-modelCenter[0], -modelCenter[1], -modelCenter[2]);
     const fromCenter = m4.translation(modelCenter[0], modelCenter[1], modelCenter[2]);
-    let modelLocal = m4.multiply(trackball, toCenter);
+    let modelLocal = m4.multiply(orientation, toCenter);
     modelLocal = m4.multiply(fromCenter, modelLocal);
 
-    // Push the model in front of convergence -> negative parallax (in front of screen)
     const distance = -(stereoCam.mConvergence - 2.0);
     const pushIntoScene = m4.translation(0, 0, distance);
+    const modelView = m4.multiply(pushIntoScene, modelLocal);
 
-    let modelView = m4.multiply(pushIntoScene, modelLocal);
-
-    // ---- LEFT EYE (red channel) ----
-    let leftProj = stereoCam.calcLeftFrustum();
-    let leftMV = m4.multiply(m4.translation(stereoCam.mEyeSeparation / 2, 0, 0), modelView);
-
+    // Left eye
+    const leftProj = stereoCam.calcLeftFrustum();
+    const leftMV = m4.multiply(m4.translation(stereoCam.mEyeSeparation / 2, 0, 0), modelView);
     gl.colorMask(true, false, false, true);
     drawStereoEye(leftProj, leftMV);
 
     gl.clear(gl.DEPTH_BUFFER_BIT);
 
-    // ---- RIGHT EYE (cyan = green + blue) ----
-    let rightProj = stereoCam.calcRightFrustum();
-    let rightMV = m4.multiply(m4.translation(-stereoCam.mEyeSeparation / 2, 0, 0), modelView);
-
+    // Right eye
+    const rightProj = stereoCam.calcRightFrustum();
+    const rightMV = m4.multiply(m4.translation(-stereoCam.mEyeSeparation / 2, 0, 0), modelView);
     gl.colorMask(false, true, true, true);
     drawStereoEye(rightProj, rightMV);
 
@@ -186,12 +201,8 @@ function initBackground() {
 
     bgTexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, bgTexBuffer);
-    // Mirror X for natural selfie view, flip Y so video isn't upside down
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        1, 1,
-        0, 1,
-        1, 0,
-        0, 0,
+        1, 1, 0, 1, 1, 0, 0, 0,
     ]), gl.STATIC_DRAW);
 
     videoTexture = gl.createTexture();
@@ -235,36 +246,29 @@ async function startWebcam() {
 
 
 function initGL() {
-    let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+    const prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
     shProgram = new ShaderProgram('Basic', prog);
     shProgram.Use();
-
     shProgram.iAttribVertex = gl.getAttribLocation(prog, 'vertex');
     shProgram.iModelViewMatrix = gl.getUniformLocation(prog, 'ModelViewMatrix');
     shProgram.iProjectionMatrix = gl.getUniformLocation(prog, 'ProjectionMatrix');
     shProgram.iColor = gl.getUniformLocation(prog, 'color');
 
-    let data = {};
-    CreateSurfaceData(data, {
-        R: 1.0,    // equator radius
-        H: 1.5,    // half-height (so total height is 3.0)
-        slicesPhi: 64,
-        stacksT: 48,
-    });
+    const data = {};
+    CreateSurfaceData(data, { R: 1.0, H: 1.5, slicesPhi: 64, stacksT: 48 });
 
     surface = new Model('ParabolicHummingTop');
     surface.BufferData(data.verticesF32, data.indicesU16);
-
     modelCenter = computeCenterOfMass(data.verticesF32);
 
     stereoCam = new StereoCamera(
-        14.0,                  // Convergence
-        0.7,                   // Eye Separation
-        1.0,                   // Aspect Ratio (canvas is 600x600)
-        23.0 * Math.PI / 180,  // FOV (radians)
-        8.0,                   // Near
-        20.0                   // Far
+        14.0,                    // Convergence
+        0.7,                     // Eye Separation
+        1.0,                     // Aspect Ratio
+        23.0 * Math.PI / 180,    // FOV (radians)
+        8.0,                     // Near
+        20.0                     // Far
     );
 
     initBackground();
@@ -275,25 +279,22 @@ function initGL() {
 
 
 function createProgram(gl, vShader, fShader) {
-    let vsh = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vsh, vShader);
-    gl.compileShader(vsh);
-    if (!gl.getShaderParameter(vsh, gl.COMPILE_STATUS)) {
-        throw new Error('Error in vertex shader: ' + gl.getShaderInfoLog(vsh));
-    }
-    let fsh = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fsh, fShader);
-    gl.compileShader(fsh);
-    if (!gl.getShaderParameter(fsh, gl.COMPILE_STATUS)) {
-        throw new Error('Error in fragment shader: ' + gl.getShaderInfoLog(fsh));
-    }
-    let prog = gl.createProgram();
+    const vsh = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vsh, vShader); gl.compileShader(vsh);
+    if (!gl.getShaderParameter(vsh, gl.COMPILE_STATUS))
+        throw new Error('Vertex shader: ' + gl.getShaderInfoLog(vsh));
+
+    const fsh = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fsh, fShader); gl.compileShader(fsh);
+    if (!gl.getShaderParameter(fsh, gl.COMPILE_STATUS))
+        throw new Error('Fragment shader: ' + gl.getShaderInfoLog(fsh));
+
+    const prog = gl.createProgram();
     gl.attachShader(prog, vsh);
     gl.attachShader(prog, fsh);
     gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-        throw new Error('Link error in program: ' + gl.getProgramInfoLog(prog));
-    }
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
+        throw new Error('Link error: ' + gl.getProgramInfoLog(prog));
     return prog;
 }
 
@@ -310,9 +311,8 @@ function init() {
         return;
     }
 
-    try {
-        initGL();
-    } catch (e) {
+    try { initGL(); }
+    catch (e) {
         document.getElementById('canvas-holder').innerHTML =
             '<p>Sorry, could not initialize the WebGL graphics context: ' + e + '</p>';
         return;
@@ -324,9 +324,10 @@ function init() {
         document.getElementById(id).addEventListener('input', draw);
     });
 
-    function tick() {
-        draw();
-        requestAnimationFrame(tick);
-    }
+    // PA#2 — connect to the bridge. The page is normally served by the same
+    // bridge process, so use the page's hostname and the WS port (8081 by default).
+    sensorClient = new SensorClient({ alpha: 0.15 });
+
+    function tick() { draw(); requestAnimationFrame(tick); }
     tick();
 }

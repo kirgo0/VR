@@ -1,0 +1,12 @@
+{
+    "name": "tui-sensor-bridge",
+    "version": "1.0.0",
+    "description": "HTTP→WebSocket bridge for phone accelerometer streaming (PA#2)",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "ws": "^8.18.0"
+    }
+}
