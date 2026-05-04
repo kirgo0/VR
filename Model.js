@@ -157,3 +157,60 @@ function CreateSurfaceData(data, params) {
         data.indicesU16[i * 3 + 2] = triangles[i].v2;
     }
 }
+/* -----------------------------------------------------------
+ * Sphere mesh
+ * -----------------------------------------------------------
+ *
+ * Used to visualize the spatial audio source position.
+ * The sphere is rendered with the same simple shader as the surface.
+ * -----------------------------------------------------------
+ */
+function CreateSphereData(data, params) {
+    params = params || {};
+
+    const radius = params.radius !== undefined ? params.radius : 0.12;
+    const slices = params.slices !== undefined ? params.slices : 32;
+    const stacks = params.stacks !== undefined ? params.stacks : 16;
+
+    const vertices = [];
+    const indices = [];
+
+    for (let i = 0; i <= stacks; i++) {
+        const v = i / stacks;
+        const theta = v * Math.PI;
+
+        const sinTheta = Math.sin(theta);
+        const cosTheta = Math.cos(theta);
+
+        for (let j = 0; j <= slices; j++) {
+            const u = j / slices;
+            const phi = u * 2.0 * Math.PI;
+
+            const sinPhi = Math.sin(phi);
+            const cosPhi = Math.cos(phi);
+
+            const x = radius * sinTheta * cosPhi;
+            const y = radius * cosTheta;
+            const z = radius * sinTheta * sinPhi;
+
+            vertices.push(x, y, z);
+        }
+    }
+
+    const stride = slices + 1;
+
+    for (let i = 0; i < stacks; i++) {
+        for (let j = 0; j < slices; j++) {
+            const v0 = i * stride + j;
+            const v1 = v0 + 1;
+            const v2 = (i + 1) * stride + j;
+            const v3 = v2 + 1;
+
+            indices.push(v0, v2, v3);
+            indices.push(v0, v3, v1);
+        }
+    }
+
+    data.verticesF32 = new Float32Array(vertices);
+    data.indicesU16 = new Uint16Array(indices);
+}

@@ -4,7 +4,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
-    <title>PA#2 — TUI Anaglyph Stereo</title>
+    <title>Spatial Audio — WebAudio + WebGL</title>
     <style>
         body {
             background-color: #EEEEEE;
@@ -33,6 +33,7 @@
             display: flex;
             align-items: center;
             margin: 6px 0;
+            gap: 8px;
         }
 
         .control-row label {
@@ -44,9 +45,20 @@
         }
 
         .control-row span {
-            width: 70px;
+            width: 90px;
             text-align: right;
             font-family: monospace;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        button {
+            padding: 6px 12px;
+            cursor: pointer;
         }
 
         #webcam {
@@ -67,6 +79,11 @@
         #status .bad {
             color: #a32;
         }
+
+        audio {
+            width: 600px;
+            margin-top: 8px;
+        }
     </style>
 
     <script src="./Utils/trackball-rotator.js"></script>
@@ -75,18 +92,19 @@
     <script src="./Model.js"></script>
     <script src="./StereoCamera.js"></script>
     <script src="./SensorClient.js"></script>
+    <script src="./AudioController.js"></script>
     <script src="./main.js"></script>
 
 </head>
 
 <body onload="init()">
 
-    <h2>PA#2 — Parabolic Humming-Top, Phone-Tilt TUI</h2>
+    <h2>Spatial Audio — WebAudio, WebGL, Phone-Tilt TUI</h2>
 
     <p id="message">
-        Drag with mouse/finger to rotate. Phone tilt (accelerometer) composes with
-        the trackball — toggle below.<br>
-        Put on red/cyan glasses for the stereo effect.
+        The parabolic surface stays still. The sound source rotates around the geometrical center of the surface patch.
+        The phone accelerometer controls the spatial position of the source.
+        The red sphere visualizes the current sound source position.
     </p>
 
     <div id="canvas-holder">
@@ -95,27 +113,72 @@
 
     <video id="webcam" autoplay playsinline muted></video>
 
+    <audio id="music" crossorigin="anonymous" loop controls>
+        <source src="./assets/song.mp3" type="audio/mpeg">
+        <source src="./assets/song.ogg" type="audio/ogg">
+        Your browser does not support the audio element.
+    </audio>
+
     <div id="controls">
+        <div class="button-row">
+            <button id="playAudio">Play spatial audio</button>
+            <button id="pauseAudio">Pause</button>
+        </div>
+
+        <div class="control-row">
+            <label for="enableLowShelf">Low-shelf filter</label>
+            <input type="checkbox" id="enableLowShelf">
+            <span>variant 7</span>
+        </div>
+
+        <div class="control-row">
+            <label for="filterFreq">Filter frequency</label>
+            <input type="range" id="filterFreq" min="80" max="1000" step="10" value="320">
+            <span id="filterFreqVal">320 Hz</span>
+        </div>
+
+        <div class="control-row">
+            <label for="filterGain">Filter gain</label>
+            <input type="range" id="filterGain" min="-20" max="20" step="1" value="10">
+            <span id="filterGainVal">+10 dB</span>
+        </div>
+
+        <div class="control-row">
+            <label for="sourceRadius">Source radius</label>
+            <input type="range" id="sourceRadius" min="0.8" max="4.0" step="0.05" value="2.2">
+            <span id="sourceRadiusVal">2.20</span>
+        </div>
+
+        <div class="control-row">
+            <label for="sourceHeight">Source height</label>
+            <input type="range" id="sourceHeight" min="-1.5" max="1.5" step="0.05" value="0.4">
+            <span id="sourceHeightVal">0.40</span>
+        </div>
+
         <div class="control-row">
             <label for="eyeSep">Eye Separation</label>
             <input type="range" id="eyeSep" min="0.0" max="2.0" step="0.01" value="0.7">
             <span id="eyeSepVal">0.70</span>
         </div>
+
         <div class="control-row">
             <label for="fov">Field of View (deg)</label>
             <input type="range" id="fov" min="10" max="90" step="1" value="23">
             <span id="fovVal">23</span>
         </div>
+
         <div class="control-row">
             <label for="near">Near Clipping</label>
             <input type="range" id="near" min="1.0" max="15.0" step="0.1" value="8.0">
             <span id="nearVal">8.0</span>
         </div>
+
         <div class="control-row">
             <label for="conv">Convergence</label>
             <input type="range" id="conv" min="5.0" max="40.0" step="0.1" value="14.0">
             <span id="convVal">14.0</span>
         </div>
+
         <div class="control-row">
             <label for="useTilt">Use phone tilt</label>
             <input type="checkbox" id="useTilt" checked>
@@ -128,6 +191,9 @@
         &nbsp;|&nbsp; ax=<span id="axVal">0.00</span>
         &nbsp; ay=<span id="ayVal">0.00</span>
         &nbsp; az=<span id="azVal">0.00</span>
+        &nbsp;|&nbsp; source=(<span id="sxVal">0.00</span>,
+        <span id="syVal">0.00</span>,
+        <span id="szVal">0.00</span>)
     </div>
 
 </body>
